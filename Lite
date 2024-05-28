@@ -27,8 +27,7 @@ function module.Refresh()
 		module.dropDown:Refresh()
 	end
 end
-	for _,v in inventory do
-end
+
 function module.GiveItem(name,value)
 	local Item = module.CheckInventory(name) or Instance.new("NumberValue")
 	Item.Name = name
@@ -132,4 +131,4 @@ Callback = <function> - The function of the button.
 
 
 OrionLib:Init()
-return module.Start()
+return module.Start
