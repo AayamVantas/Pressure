@@ -1,63 +1,169 @@
-if game.PlaceId ~= 17513118821 then return end
 
-local module = {}
-module.__index = module
+-- SERVICES
+local Debris = game:getService("Debris")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Player = Players.LocalPlayer
+
+-- MODULE DEFINING
+local API = {
+	Threader = {},
+	Signal = {},
+	Common = {},
+}
+local Debug = {
+	Initilization = os.clock(),
+}
 
 
-local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Orion/main/source"))()
-local Window = OrionLib:MakeWindow({Name = "Pressure Lite", HidePremium = false, IntroEnabled = false , SaveConfig = false, ConfigFolder = "Pressure Light (light)"})
-local inventory =game.Players.LocalPlayer.PlayerFolder.Inventory
-local inventoryList = {}
+do -- API THREADER MODULE (By darkness)
+	local Threads = {Free = {},Used = {}}
 
-
---Functions
-function module.CheckInventory(name)
-	for _,v in inventory:GetChildren() do
-		if v.Name == name then
-			return v
+	local function YieldThread(callback, ...)
+		callback(...)
+		while true do
+			coroutine.yield()
 		end
 	end
-end
-function module.Refresh()
-	table.clear(inventoryList)
-	for _,v in inventory:GetChildren() do
-		table.insert(inventoryList,v.Name)
+	
+	local function RunThread(thread, callback, ...)
+		callback(...)
+		table.remove(Threads.Used, table.find(Threads.Used, thread))
+		table.insert(Threads.Free, thread)
 	end
-	if module.dropDown then
-		module.dropDown:Refresh()
+
+	function API.Threader.Thread(callback, ...) -- Creates a new thread or uses one that was already in memory waiting to be GCed
+		local ThreadUsed = Threads.Free[1]
+		if not ThreadUsed or coroutine.status(ThreadUsed) ~= "suspended" then
+			if ThreadUsed and coroutine.status(ThreadUsed) == "running" then
+				table.insert(Threads.Used, ThreadUsed)
+				ThreadUsed = coroutine.create(YieldThread)
+			else
+				if ThreadUsed then
+					table.remove(Threads.Free,1)
+					ThreadUsed = nil
+				end
+				ThreadUsed = coroutine.create(YieldThread)
+			end
+		end
+		Threads.Free[1] = nil
+		table.insert(Threads.Used, ThreadUsed)
+		task.spawn(ThreadUsed, RunThread, ThreadUsed, callback, ...)
+	end
+	
+end
+
+do-- API SIGNAL MODULE (by darkness)
+	local SignalThread = nil
+	
+	local function acquireThread(callback, ...)
+		local acquiredThread = SignalThread
+		SignalThread = nil
+		callback(...)
+	end
+	
+	local function YieldThread(callback, ...)
+		acquireThread(...)
+		while true do
+			acquireThread(coroutine.yield())
+		end
+	end
+	
+	local Signal = {
+		Wait = function(self) -- UNLIKE THE ROBLOX WAIT THIS DOES NOT RETURN THE RESULT, DM DARKNESS TO ADD IT. (I was too lazy bitch)
+			local currentthread = coroutine.running()
+			local Connection
+			Connection = self:Connect(function(...)
+				if Connection._connected then
+					Connection:Disconnect()
+				end
+				task.spawn(currentthread, ...)
+			end)
+			return coroutine.yield()
+		end,
+		Once = function(self, callback)
+			local Connection;
+			Connection = self:Connect(function(...)
+				if Connection._connected then
+					Connection:Disconnect()
+				end
+				callback(...)
+			end)
+			return Connection
+		end,
+		Fire = function(self, ...)
+			for _,Signal in next, self._connections do
+				if Signal and Signal._connected then
+					if not SignalThread then
+						SignalThread = coroutine.create(YieldThread)
+					end
+					task.spawn(SignalThread, Signal._callback, ...)
+				end
+			end
+		end,
+	}
+	
+	local function DisconnectSignal(self)
+		self._signalconnected._connections[table.find(self._signalconnected._connections,self)] = nil
+		self._connected = false -- May be able to just delete this shit. It's a JUST IN CASE type fuckery.
+		self = nil
+	end
+	
+	function Signal:Connect(callback)
+		local ConnectedSignal = {
+			_signalconnected = self,
+			_connected = true,
+			_callback = callback,
+			Disconnect = DisconnectSignal,
+		}
+		table.insert(self._connections,ConnectedSignal)
+		return ConnectedSignal
+	end
+	
+	function API.Signal.CreateSignal() -- Creates a signal that is near exactly like Roblox's
+		local createdsignal = table.clone(Signal)
+		createdsignal._connections = {}
+		return createdsignal
 	end
 end
 
-function module.GiveItem(name,value)
-	local Item = module.CheckInventory(name) or Instance.new("NumberValue")
-	Item.Name = name
-	Item.Value += value
-	Item.Parent = inventory
-	module.Refresh()
-end
-function module.RemoveItem(name)
-	local Item = module.CheckInventory(name)
-	if Item then Item:Destroy() end
-	module.Refresh()
-end
-function module.squiddlesAttack()
-	local event = game.ReplicatedStorage.Events:WaitForChild("SquiddleAttack",2)
-	if not event then return warn("Squiddles already disabled!") end
-	event:Destroy()
+do -- API COMMON MODULE (by darkness)
+	local Remote = ReplicatedStorage.Events
+	local Inventory = Player.PlayerFolder.Inventory
+	
+	function API.Common.squiddlesbreaker()
+		Debris:AddItem(Remote:FindFirstChild("SquiddleAttack"),0) -- WILL NOT ERROR EVEN IF nil
+	end
+	
+	function API.Common.removeitem(item)
+		if not item then
+			return -- you're stupid as shit.
+		end
+		
+		Debris:AddItem(Inventory:FindFirstChild(item),0) -- WILL NOT ERROR EVEN IF nil
+	end
+	
+	function API.Common.cloneitem(item, value)
+		if not item or not value then
+			return -- bro you're fucking stupid.
+		end
+
+		local Item = Inventory:FindFirstChild(item)
+		if not Item then
+			Item = Instance.new("NumberValue")
+			Item.Name = item
+			Item.Parent = Inventory
+		end
+		Item.Value += value
+	end
+	
 end
 
-function module.LightDupe(name)
-	if not name then return end
-	module.GiveItem(name,210)
-end
+-- LIBRARY CREATION
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Orion/main/source"))()
+local Window = Library:MakeWindow({Name = "Pressure Lite", HidePremium = false, IntroEnabled = false , SaveConfig = false, ConfigFolder = "Pressure Light (light)"})
 
-function module.ItemDupe(name)
-	if not name then return end
-	module.GiveItem(name,1)
-end
--- screens
-function module.Start()
-
+do -- Credits nerd
 	local Credits = Window:MakeTab({
 		Name = "Credits",
 		Icon = "rbxassetid://4483345998",
@@ -65,7 +171,10 @@ function module.Start()
 	})
 
 	Credits:AddLabel("Original Creator - Pugser_Plays \n the person that fixed everything - Dr. AV")
+	-- I was here, although I did nothing. (darkness)
+end
 
+do -- Fake Items
 	local FakeItems = Window:MakeTab({
 		Name = "Ghost Items",
 		Icon = "rbxassetid://4483345998",
@@ -74,27 +183,26 @@ function module.Start()
 
 	FakeItems:AddLabel("Most Items require you to have originally had one,\nthis doesn't apply to keycards and code breachers")
 
-
-
 	FakeItems:AddDropdown({
 		Name = "Select Ghost Light",
 		Default = "None",
 		Options = {"Flashlight", "Lantern", "Gummylight", "Splorglight", "FlashBeacon", "WindupLight", "Book"},
 		Callback = function(Value)
-			module.LightDupe(Value)
-		end 
+			API.Common.cloneitem(Value, 210)
+		end
 	})
-
-
 
 	FakeItems:AddDropdown({
 		Name = "Select Ghost Item",
 		Default = "None",
 		Options = {"CodeBreacher", "Medkit", "NormalKeyCard", "RidgeKeyCard", "InnerKeyCard","Notebook"},
 		Callback = function(Value)
-			module.ItemDupe(Value)
-		end    
+			API.Common.cloneitem(Value, 1)
+		end
 	})
+end
+
+do -- Utility
 	local Utils = Window:MakeTab({
 		Name = "Utils",
 		Icon = "rbxassetid://4483345998",
@@ -105,30 +213,33 @@ function module.Start()
 	Utils:AddButton({
 		Name = "Disable Squiddles",
 		Callback = function()
-			module.squiddlesAttack()
+			API.Common.squiddlesbreaker()
 		end    
 	})
 
-
-	 module.dropDown = Utils:AddDropdown({
+	local InvList = {}
+	local DropDown = Utils:AddDropdown({
 		Name = "Delete an item",
 		Default = "None",
-		Options = inventoryList,
+		Options = InvList,
 		Callback = function(Value)
-			module.RemoveItem(Value)
-		end 
-		
+			API.Common.removeitem(Value)
+		end
 	})
-	module.Refresh()
-
+	
+	local Inventory = Player.PlayerFolder.Inventory
+	local function Refresh()
+		InvList = Inventory:GetChildren()
+		DropDown:Refresh()
+	end
+	Inventory.ChildAdded:Connect(Refresh)
+	Inventory.ChildRemoved:Connect(Refresh)
+	
 end
---[[
-Name = <string> - The name of the button.
-Callback = <function> - The function of the button.
-]]
 
+-- finalize.
 
-
-
-OrionLib:Init()
-return module.Start
+Library:Init()
+print("Script Successfully Initialized.")
+warn("Debug Information: \n Initialization time: "..Debug.Initilization - os.clock())
+return nil -- Dunno why TF we are returning this? If you really want to i'll return nil. (darkness)
