@@ -1,0 +1,135 @@
+if game.PlaceId ~= 17513118821 then return end
+
+local module = {}
+module.__index = module
+
+
+local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Orion/main/source"))()
+local Window = OrionLib:MakeWindow({Name = "Pressure Lite", HidePremium = false, IntroEnabled = false , SaveConfig = false, ConfigFolder = "Pressure Light (light)"})
+local inventory =game.Players.LocalPlayer.PlayerFolder.Inventory
+local inventoryList = {}
+
+
+--Functions
+function module.CheckInventory(name)
+	for _,v in inventory:GetChildren() do
+		if v.Name == name then
+			return v
+		end
+	end
+end
+function module.Refresh()
+	table.clear(inventoryList)
+	for _,v in inventory:GetChildren() do
+		table.insert(inventoryList,v.Name)
+	end
+	if module.dropDown then
+		module.dropDown:Refresh()
+	end
+end
+	for _,v in inventory do
+end
+function module.GiveItem(name,value)
+	local Item = module.CheckInventory(name) or Instance.new("NumberValue")
+	Item.Name = name
+	Item.Value += value
+	Item.Parent = inventory
+	module.Refresh()
+end
+function module.RemoveItem(name)
+	local Item = module.CheckInventory(name)
+	if Item then Item:Destroy() end
+	module.Refresh()
+end
+function module.squiddlesAttack()
+	local event = game.ReplicatedStorage.Events:WaitForChild("SquiddleAttack",2)
+	if not event then return warn("Squiddles already disabled!") end
+	event:Destroy()
+end
+
+function module.LightDupe(name)
+	if not name then return end
+	module.GiveItem(name,210)
+end
+
+function module.ItemDupe(name)
+	if not name then return end
+	module.GiveItem(name,1)
+end
+-- screens
+function module.Start()
+
+	local Credits = Window:MakeTab({
+		Name = "Credits",
+		Icon = "rbxassetid://4483345998",
+		PremiumOnly = false
+	})
+
+	Credits:AddLabel("Original Creator - Pugser_Plays \n the person that fixed everything - Dr. AV")
+
+	local FakeItems = Window:MakeTab({
+		Name = "Ghost Items",
+		Icon = "rbxassetid://4483345998",
+		PremiumOnly = false
+	})
+
+	FakeItems:AddLabel("Most Items require you to have originally had one,\nthis doesn't apply to keycards and code breachers")
+
+
+
+	FakeItems:AddDropdown({
+		Name = "Select Ghost Light",
+		Default = "None",
+		Options = {"Flashlight", "Lantern", "Gummylight", "Splorglight", "FlashBeacon", "WindupLight", "Book"},
+		Callback = function(Value)
+			module.LightDupe(Value)
+		end 
+	})
+
+
+
+	FakeItems:AddDropdown({
+		Name = "Select Ghost Item",
+		Default = "None",
+		Options = {"CodeBreacher", "Medkit", "NormalKeyCard", "RidgeKeyCard", "InnerKeyCard","Notebook"},
+		Callback = function(Value)
+			module.ItemDupe(Value)
+		end    
+	})
+	local Utils = Window:MakeTab({
+		Name = "Utils",
+		Icon = "rbxassetid://4483345998",
+		PremiumOnly = false
+	})
+
+
+	Utils:AddButton({
+		Name = "Disable Squiddles",
+		Callback = function()
+			module.squiddlesAttack()
+		end    
+	})
+
+
+	 module.dropDown = Utils:AddDropdown({
+		Name = "Delete an item",
+		Default = "None",
+		Options = inventoryList,
+		Callback = function(Value)
+			module.RemoveItem(Value)
+		end 
+		
+	})
+	module.Refresh()
+
+end
+--[[
+Name = <string> - The name of the button.
+Callback = <function> - The function of the button.
+]]
+
+
+
+
+OrionLib:Init()
+return module.Start()
